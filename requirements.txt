@@ -1,0 +1,3 @@
+pmtiles
+mapbox-vector-tile
+shapely>=2.0

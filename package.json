@@ -1,0 +1,9 @@
+{
+  "name": "coastal-taichung-atlas",
+  "private": true,
+  "description": "台中海線交通數位地圖 | Vision Zero Taiwan",
+  "dependencies": {
+    "taiwan-atlas": "^2021.9.20",
+    "topojson-client": "^3.1.0"
+  }
+}

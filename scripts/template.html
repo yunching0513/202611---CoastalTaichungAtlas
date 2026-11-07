@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>台中海線交通數位地圖</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@100;300;400;500;700&family=Space+Grotesk:wght@300;400;500;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+/* VZT Style Guide: whitespace first, one accent (lime), weight contrast, geometric ring, ZH/EN bilingual */
+:root{--lime:#C8D400;--lime-d:#6E7A00;--ink:#1A1A1A;--body:#4A4A4A;--lab:#888888;--line:#D0D0D0;--card:#F2F2F2;--white:#FFFFFF;--red:#D94F3D;--blue:#3A7CC3;--gold:#E8A825;--sea:#FFFFFF;--shadow:0 1px 4px rgba(0,0,0,.08);--en:'Space Grotesk','Noto Sans TC',sans-serif}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Noto Sans TC',system-ui,sans-serif;color:var(--ink);background:var(--card);font-weight:300;line-height:1.6;padding:40px}
+a{color:var(--ink);text-decoration:underline;text-decoration-color:var(--lime);text-decoration-thickness:2px;text-underline-offset:3px}
+.en{font-family:var(--en)}
+.eyebrow{font-family:var(--en);font-size:10px;font-weight:600;letter-spacing:.25em;text-transform:uppercase;color:var(--lab)}
+.secline{display:flex;align-items:center;gap:12px}
+.secline::after{content:'';flex:1;height:1px;background:var(--line)}
+/* header */
+.page-header{position:relative;overflow:hidden;display:flex;align-items:flex-end;gap:24px;padding:0 0 24px;margin-bottom:24px;border-bottom:2px solid var(--ink);min-height:150px}
+.page-header .logo{display:flex;align-items:center;gap:10px;flex:none;align-self:flex-start}
+.page-header .logo-mark{display:inline-block;font-family:var(--en);font-size:9px;font-weight:600;letter-spacing:.15em;border:1.5px solid var(--ink);padding:4px 8px;text-transform:uppercase;white-space:nowrap}
+.page-header .titles{flex:1;min-width:0;position:relative;z-index:1}
+.page-header h1{font-weight:100;font-size:46px;letter-spacing:.08em;line-height:1.2;margin:8px 0 10px}
+.page-header .sub{font-size:13px;line-height:1.85;color:var(--body);max-width:760px}
+.page-header .ring{position:absolute;right:-70px;top:-60px;width:260px;height:260px;pointer-events:none}
+/* KPI cards */
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:24px}
+.kpi{background:var(--white);box-shadow:var(--shadow);padding:20px 24px 22px;border-top:3px solid var(--lime)}
+.kpi:nth-child(even){border-top-color:var(--ink)}
+.kpi .eyebrow{margin-bottom:10px}
+.kpi .num{font-family:var(--en);font-weight:300;font-size:44px;line-height:.95;letter-spacing:-.02em}
+.kpi .num small{font-size:15px;color:var(--lab);margin-left:6px;letter-spacing:0;font-weight:400}
+.kpi .lab{font-size:12px;color:var(--body);margin-top:10px;line-height:1.6}
+/* category bar */
+.themes{display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap}
+.themes .eyebrow{flex:none}
+.category-bar{display:flex;gap:6px;flex-wrap:wrap}
+.cat-pill,.chips button,.viewbtns button{font-family:'Noto Sans TC',sans-serif;font-size:12px;font-weight:400;letter-spacing:.03em;padding:6px 14px;border:1px solid var(--line);background:var(--white);color:var(--body);cursor:pointer;transition:background .15s,border-color .15s}
+.cat-pill:hover,.chips button:hover,.viewbtns button:hover{border-color:var(--ink)}
+.cat-pill.on,.chips button.on,.viewbtns button.on{background:var(--lime);border-color:var(--lime);color:var(--ink);font-weight:700}
+.cat-pill .en{display:block;font-size:8px;letter-spacing:.18em;text-transform:uppercase;color:var(--lab);font-weight:500;margin-top:1px}
+.cat-pill.on .en{color:var(--ink)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+/* main */
+.wrap{display:grid;grid-template-columns:1fr 380px;gap:24px;height:max(640px,calc(100vh - 80px))}
+#mapbox{position:relative;background:var(--sea);box-shadow:var(--shadow);height:100%;overflow:hidden}
+#map{width:100%;height:100%;display:block;cursor:grab}
+#map:active{cursor:grabbing}
+.viewbtns{position:absolute;left:16px;top:16px;display:flex;gap:6px}
+.zoombtns{position:absolute;right:16px;top:16px;display:flex;flex-direction:column;gap:4px}
+.zoombtns button{width:36px;height:36px;border:1px solid var(--line);background:var(--white);font-size:16px;cursor:pointer;font-family:var(--en);color:var(--ink)}
+.zoombtns button:hover{border-color:var(--ink)}
+.maplegend{position:absolute;left:16px;bottom:16px;background:rgba(255,255,255,.96);box-shadow:var(--shadow);padding:16px;font-size:11px;max-width:300px;border-top:3px solid var(--lime)}
+.maplegend .ttl{font-size:12px;font-weight:400;margin-bottom:8px;letter-spacing:.03em}
+.ramp{display:flex;height:8px;margin:4px 0 4px}
+.ramp span{flex:1}
+.rampl{display:flex;justify-content:space-between;color:var(--lab);font-family:var(--en);font-size:10px;margin-bottom:6px}
+.lgline{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--body);margin:3px 0}
+.lgline i{display:inline-block;width:26px;flex:none}
+.note{font-size:11px;color:var(--lab);margin-top:8px;line-height:1.7;font-weight:300}
+#tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--white);font-size:12px;padding:8px 12px;max-width:260px;opacity:0;transition:opacity .1s;line-height:1.6;z-index:5;font-weight:300}
+#tip div:first-child{font-weight:500}
+aside{display:flex;flex-direction:column;gap:16px;overflow-y:auto;height:100%;padding:0 4px 4px 0}
+.sec{background:var(--white);box-shadow:var(--shadow);padding:20px 24px}
+.sec h3{font-size:16px;font-weight:400;letter-spacing:.05em;margin:10px 0 12px}
+label.row{display:flex;align-items:center;gap:10px;font-size:13px;padding:4px 0;cursor:pointer;color:var(--ink)}
+label.row input{accent-color:var(--lime-d);width:15px;height:15px;flex:none}
+.sw{display:inline-block;width:14px;height:14px;flex:none}
+select{width:100%;font-family:inherit;font-size:13px;font-weight:400;padding:9px 12px;border:1px solid var(--line);background:var(--white);color:var(--ink);border-radius:0;appearance:none;background-image:linear-gradient(45deg,transparent 50%,#1A1A1A 50%),linear-gradient(135deg,#1A1A1A 50%,transparent 50%);background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%;background-size:5px 5px;background-repeat:no-repeat}
+select:focus,button:focus-visible,input:focus-visible{outline:2px solid var(--lime);outline-offset:1px}
+#info{min-height:260px;border-top:3px solid var(--lime)}
+#info .big{font-weight:100;font-size:32px;letter-spacing:.04em;line-height:1.2;margin:10px 0 10px}
+#info dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:12px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+#info dt{color:var(--lab)}
+#info dd{color:var(--ink);font-weight:400}
+#info .tag{display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;background:var(--lime);color:var(--ink);margin:0 6px 6px 0;letter-spacing:.03em}
+#info .tag.o{background:var(--white);border:1px solid var(--line);color:var(--body);font-weight:400}
+#info p{font-size:13px;color:var(--body);margin-top:10px;line-height:1.85}
+#info .date{font-family:var(--en);font-weight:500;font-size:13px;color:var(--lime-d);letter-spacing:.05em}
+.mini{margin-top:12px}
+.mini .bars{display:flex;align-items:flex-end;gap:4px;height:84px;border-bottom:1px solid var(--ink)}
+.mini .bars div{flex:1;background:var(--line);position:relative}
+.mini .bars div.hl{background:var(--lime)}
+.mini .bars div.part{background:repeating-linear-gradient(45deg,var(--card),var(--card) 3px,var(--line) 3px,var(--line) 6px)}
+.mini .bars span{position:absolute;top:-17px;left:0;right:0;text-align:center;font-size:10px;font-family:var(--en);color:var(--ink)}
+.mini .yrs{display:flex;gap:4px;font-family:var(--en);font-size:10px;color:var(--lab);margin-top:4px}
+.mini .yrs span{flex:1;text-align:center}
+.mini .cap{font-size:11px;color:var(--lab);margin-bottom:20px}
+/* footer */
+.foot-cards{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:40px}
+.foot-cards .card{background:var(--white);box-shadow:var(--shadow);padding:24px 28px;border-top:3px solid var(--lime);font-size:13px;color:var(--body);line-height:1.85}
+.foot-cards .card:nth-child(2){border-top-color:var(--ink)}
+.foot-cards h4{font-size:16px;font-weight:400;letter-spacing:.05em;color:var(--ink);margin:10px 0 10px}
+.foot-cards ol,.foot-cards ul{padding-left:18px}
+.foot-cards li{margin-bottom:4px}
+.foot-bar{border-top:2px solid var(--ink);padding-top:20px;margin-top:40px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+.foot-bar .r{font-size:11px;color:var(--lab)}
+@media (max-width:980px){
+ body{padding:20px}
+ .wrap{grid-template-columns:1fr;height:auto}
+ #mapbox{height:72vh}
+ aside{height:auto;overflow:visible}
+ .kpis{grid-template-columns:repeat(2,1fr)}
+ .foot-cards{grid-template-columns:1fr}
+ .page-header h1{font-size:30px}
+ .page-header .ring{width:120px;height:120px;right:-44px;top:-30px}
+ .maplegend{max-width:190px;padding:10px 12px;left:10px;bottom:10px}
+ .maplegend .note{display:none}
+ .lgline{font-size:10px}
+ .viewbtns button{padding:5px 10px;font-size:11px}
+ .page-header{flex-direction:column;align-items:flex-start}
+}
+</style>
+</head>
+<body>
+<header class="page-header">
+ <svg class="ring" viewBox="0 0 260 260" aria-hidden="true"><circle cx="130" cy="130" r="96" fill="none" stroke="#C8D400" stroke-width="40"/></svg>
+ <div class="titles">
+  <div class="logo">
+   <svg width="40" height="40" viewBox="0 0 36 36" aria-label="Vision Zero Taiwan"><rect width="36" height="36" fill="#1A1A1A"/><text x="18" y="14" text-anchor="middle" fill="#FFFFFF" font-size="7" font-family="Space Grotesk" font-weight="600" letter-spacing="1">VISION</text><text x="18" y="21" text-anchor="middle" fill="#C8D400" font-size="7" font-family="Space Grotesk" font-weight="600" letter-spacing="1">ZERO</text><text x="18" y="28" text-anchor="middle" fill="#FFFFFF" font-size="6" font-family="Space Grotesk" letter-spacing="0.5">TAIWAN</text></svg>
+   <div><div class="logo-mark">Vision Zero Taiwan</div><div class="eyebrow" style="margin-top:6px">Coastal Taichung Atlas · 2026</div></div>
+  </div>
+  <h1>台中海線交通數位地圖</h1>
+  <p class="sub">大甲、大安、外埔、清水、梧棲、沙鹿、龍井、大肚8區。把交通安全、公共運輸、城鎮連接、人本交通的資料，以及依荷蘭Sustainable Safety分級的路網疊在同一張圖上，看海線怎麼連到台中市區、苗栗與彰化。先選一個主題，再點地圖上的行政區、車站、事故點或建議地點看細節。</p>
+ </div>
+</header>
+<div class="kpis">
+ <div class="kpi"><div class="eyebrow">Road Safety</div><div class="num">14.6<small>/ 10.1</small></div><div class="lab">2025年每10萬人30日死亡：海線／全市</div></div>
+ <div class="kpi"><div class="eyebrow">Share of Deaths</div><div class="num">25.8<small>%</small></div><div class="lab">海線占全市交通死亡，人口只占17.9%</div></div>
+ <div class="kpi"><div class="eyebrow">Rail Ridership</div><div class="num">20,024</div><div class="lab">海線8個台鐵站每日進出人次（2025）</div></div>
+ <div class="kpi"><div class="eyebrow">Direct Trains</div><div class="num">14<small>班</small></div><div class="lab">沙鹿每天直通臺中車站的列車</div></div>
+ <div class="kpi"><div class="eyebrow">Road Links</div><div class="num">15<small>處</small></div><div class="lab">海線對外的國道、快速公路、省縣道連接點</div></div>
+</div>
+<div class="themes">
+ <div class="eyebrow">Themes · 主題</div>
+ <div class="category-bar" id="themes">
+  <button class="cat-pill on" data-t="all">全部<span class="en">Overview</span></button>
+  <button class="cat-pill" data-t="safety">交通安全<span class="en">Road Safety</span></button>
+  <button class="cat-pill" data-t="transit">公共運輸<span class="en">Public Transport</span></button>
+  <button class="cat-pill" data-t="towns">城鎮連接<span class="en">Connectivity</span></button>
+  <button class="cat-pill" data-t="streets">人本交通<span class="en">People-centred Streets</span></button>
+ </div>
+</div>
+<div class="wrap">
+ <div id="mapbox">
+  <svg id="map" role="img" aria-label="台中海線8區交通地圖"></svg>
+  <div class="viewbtns"><button id="vRegion" class="on">中台灣：台中、苗栗、彰化</button><button id="vCore">海線8區</button></div>
+  <div class="zoombtns"><button id="zin" aria-label="放大">+</button><button id="zout" aria-label="縮小">−</button><button id="zreset" aria-label="重設" style="font-size:12px">⟲</button></div>
+  <div class="maplegend" id="legend"></div>
+  <div id="tip"></div>
+ </div>
+ <aside>
+  <div class="sec">
+   <div class="eyebrow secline">01 · Choropleth</div>
+   <h3>行政區著色</h3>
+   <select id="metric"></select>
+   <div class="note" id="metricnote"></div>
+  </div>
+  <div class="sec">
+   <div class="eyebrow secline">02 · Layers</div>
+   <h3>圖層</h3>
+   <label class="row"><input type="checkbox" data-layer="a1" checked><span class="sw" style="background:var(--gold);border:1.5px solid var(--ink);border-radius:50%"></span>A1事故點位（2025，36件）</label>
+   <label class="row"><input type="checkbox" data-layer="a2"><span class="sw" style="background:linear-gradient(90deg,#fde3d8,#D94F3D)"></span>A2事故密度（2025，10,034件）</label>
+   <label class="row"><input type="checkbox" data-layer="sta" checked><span class="sw" style="border:2px solid var(--ink);border-radius:50%;background:#fff"></span>台鐵車站（大小＝2025運量）</label>
+   <label class="row"><input type="checkbox" data-layer="rail" checked><span class="sw" style="border-top:2px dashed var(--ink);height:0;margin-top:0"></span>海線鐵路（示意）</label>
+   <label class="row"><input type="checkbox" data-layer="blvd" checked><span class="sw" style="background:var(--lime);height:6px"></span>臺灣大道走廊（公車幹線、藍線規劃）</label>
+   <label class="row"><input type="checkbox" data-layer="yb"><span class="sw" style="background:var(--blue);border-radius:50%;width:8px;height:8px;margin:0 3px"></span>YouBike 2.0站點（405站）</label>
+   <label class="row"><input type="checkbox" data-layer="site" checked><span class="sw" style="background:var(--lime);border:1px solid var(--ink)"></span>研究建議的行動地點</label>
+  </div>
+  <div class="sec">
+   <div class="eyebrow secline">03 · Road Network</div>
+   <h3>道路功能分級（Sustainable Safety）</h3>
+   <label class="row"><input type="checkbox" data-layer="rT" checked><span class="sw" style="border-top:4px solid #000;height:0"></span>通過性道路：國道、快速公路</label>
+   <label class="row"><input type="checkbox" data-layer="rD1" checked><span class="sw" style="border-top:3px solid #A6392C;height:0"></span>集散道路：省道、縣道</label>
+   <label class="row"><input type="checkbox" data-layer="rD2" checked><span class="sw" style="border-top:1.5px solid #A6392C;height:0;opacity:.6"></span>集散道路：鄉道、市區幹道（海線範圍）</label>
+   <label class="row"><input type="checkbox" data-layer="gate" checked><span class="sw" style="background:#fff;border:3px solid #7B5EA7;border-radius:50%"></span>海線對外道路連接點（空心環，依縣市分色）</label>
+   <label class="row"><input type="checkbox" data-layer="rsta" checked><span class="sw" style="background:#fff;border:1.5px solid var(--body);border-radius:50%;width:9px;height:9px;margin:0 2.5px"></span>區域台鐵車站</label>
+   <div class="note">路網取自Taiwanwonnerf（OpenStreetMap 2026-09-01）：國道、快速公路為通過性道路；省道、縣道、鄉道與市區幹道為集散道路；進出道路（市區道路、巷弄）未納入。</div>
+   <div class="chips" style="margin-top:10px"><button id="btnGates">看海線的對外連結</button></div>
+  </div>
+  <div class="sec">
+   <div class="eyebrow secline">04 · A1 Filter</div>
+   <h3>A1事故：只看涉入⋯⋯</h3>
+   <div class="chips" id="a1f">
+    <button data-f="all" class="on">全部</button><button data-f="heavy">重型貨車</button><button data-f="moto">機車</button><button data-f="old">65歲以上</button><button data-f="ped">行人</button>
+   </div>
+   <div class="note">金點＝涉入重型貨車（大貨車、曳引車、半／全聯結車），黑點＝其他。比例是「事故涉入」，不是死者身分。</div>
+  </div>
+  <div class="sec" id="info"></div>
+ </aside>
+</div>
+<div class="foot-cards">
+ <div class="card">
+  <div class="eyebrow secline">How to Read</div>
+  <h4>讀圖前要知道的事</h4>
+  <ul>
+   <li>行政區的死亡數與死亡率是交通部道安資訊查詢網的「30日死亡」；A1事故點位來自警政署資料，A1是「24小時內死亡」。2025年海線30日死亡75人、24小時死亡36人，兩者不能混用。</li>
+   <li>大安區人口少，2025年8人死亡就讓死亡率變成45.7，單年數字要保守看。</li>
+   <li>A2密度以約400公尺見方的網格彙整，顏色越深事故越多。</li>
+   <li>海線鐵路線是依車站順序連線的示意，不是實際軌道；臺灣大道走廊是用事故地址含「臺灣大道」的點位描出的大致走向。</li>
+   <li>研究建議地點依事故資料地址推估，屬示意位置；市街入口gateway的實際入口點需要現勘。</li>
+   <li>道路分級沿用Taiwanwonnerf：依OSM highway標籤與台灣道路編號對應荷蘭Sustainable Safety三層。對外連接點是道路與海線8區外圍行政界的交點，以縣市分色。</li>
+   <li>本地圖與研究報告〈先補結構，再用推力：台中海線交通推力策略研究〉（2026年11月初稿）搭配使用。</li>
+  </ul>
+ </div>
+ <div class="card">
+  <div class="eyebrow secline">Sources</div>
+  <h4>資料來源</h4>
+  <ol>
+   <li><a href="https://roadsafety.tw" target="_blank" rel="noopener">交通部道安資訊查詢網</a>：逐區30日死亡（2019–2026年8月）</li>
+   <li><a href="https://data.gov.tw/dataset/177136" target="_blank" rel="noopener">內政部警政署114年傷亡道路交通事故資料</a>：A1、A2事故點位與當事者</li>
+   <li><a href="https://data.gov.tw/dataset/8792" target="_blank" rel="noopener">國營臺灣鐵路公司每日各站進出站人數</a>、每日時刻表（2026/11/10）、車站基本資料</li>
+   <li><a href="https://apis.youbike.com.tw/json/station-yb2.json" target="_blank" rel="noopener">YouBike 2.0站點資料</a>（2026/11/6快照）</li>
+   <li><a href="https://www.ris.gov.tw/rs-opendata/api/v1/datastore/ODRP014/11509" target="_blank" rel="noopener">內政部戶政司ODRP014</a>：2018/09、2026/09人口與65歲以上占比</li>
+   <li><a href="https://www.dbas.taichung.gov.tw/media/1386278/臺中市109年人口及住宅普查結果分析.pdf" target="_blank" rel="noopener">臺中市主計處109年人口及住宅普查結果分析</a>：跨區通勤率</li>
+   <li><a href="https://www.construction.taichung.gov.tw/media/1389874/臺中市政府-永續提升人行安全計畫-第123波核定案件-公開資訊更新-1150319-彙整.pdf" target="_blank" rel="noopener">臺中市建設局永續提升人行安全計畫核定案件</a>（2026/3/19）</li>
+   <li>行政區界：<a href="https://github.com/dkaoster/taiwan-atlas" target="_blank" rel="noopener">taiwan-atlas</a>（內政部國土測繪中心鄉鎮界，簡化版）</li>
+   <li>道路功能分級：<a href="https://yunching0513.github.io/202609---Taiwanwonnerf/" target="_blank" rel="noopener">Taiwanwonnerf</a>，路網© OpenStreetMap contributors（ODbL）</li>
+  </ol>
+ </div>
+</div>
+<footer class="foot-bar">
+ <div class="eyebrow">Vision Zero Taiwan · Coastal Taichung Atlas · 2026</div>
+ <div class="r">還路於民行人路權促進會｜資料截至2026年11月6日</div>
+</footer>
+<script>
+const TOWNS=__TOWNS__;
+const COUNTIES=__COUNTIES__;
+const ROADS=__ROADS__;
+const REGSTA=__REGSTA__;
+const L=__LAYERS__;
+const DIST={
+ '大甲區':{pop:72433,chg:-6.7,old:20.0,com:25.7,comIn:20.9,comX:4.8,deaths:[13,12,9,13,7,9,11],d26:4,rate:15.0,ped7:9,ybS:60,ybD:1172,cases:3},
+ '大安區':{pop:17333,chg:-10.0,old:22.1,com:56.2,comIn:52.9,comX:3.3,deaths:[5,4,2,2,2,1,8],d26:5,rate:45.7,ped7:2,ybS:20,ybD:315,cases:1,small:true},
+ '外埔區':{pop:30632,chg:-4.9,old:19.5,com:56.4,comIn:52.5,comX:3.9,deaths:[3,5,2,3,1,1,3],d26:3,rate:9.7,ped7:2,ybS:27,ybD:389,cases:0},
+ '清水區':{pop:90396,chg:4.4,old:18.7,com:49.6,comIn:46.2,comX:3.4,deaths:[5,18,15,17,12,11,8],d26:8,rate:8.8,ped7:9,ybS:88,ybD:1511,cases:4},
+ '梧棲區':{pop:67903,chg:16.7,old:15.2,com:40.7,comIn:37.7,comX:3.0,deaths:[11,10,12,9,10,4,11],d26:5,rate:16.7,ped7:8,ybS:63,ybD:1098,cases:4},
+ '沙鹿區':{pop:101911,chg:8.9,old:14.8,com:55.4,comIn:51.4,comX:4.0,deaths:[14,18,16,14,16,9,14],d26:3,rate:13.8,ped7:17,ybS:62,ybD:1137,cases:4},
+ '龍井區':{pop:79332,chg:1.8,old:15.9,com:54.8,comIn:51.0,comX:3.8,deaths:[10,13,11,10,10,8,15],d26:16,rate:18.9,ped7:9,ybS:38,ybD:623,cases:3},
+ '大肚區':{pop:54794,chg:-4.4,old:19.6,com:48.5,comIn:42.2,comX:6.3,deaths:[5,6,6,5,8,6,5],d26:4,rate:9.0,ped7:8,ybS:47,ybD:742,cases:2}
+};
+const STA={
+ '日南':{d:'大甲區',r:[515,480,392,444,611,670,699,759],tr:'27／27',ty:'全區間車'},
+ '大甲':{d:'大甲區',r:[5282,4728,3838,3881,5362,6105,6204,7374],tr:'45／45',ty:'區間、區間快、自強、莒光',dir:'直通臺中最快50分、中位數61分'},
+ '臺中港':{d:'清水區',r:[166,171,155,135,213,252,274,354],tr:'34／32',ty:'全區間車'},
+ '清水':{d:'清水區',r:[2339,2059,1650,1782,2493,2855,3050,3081],tr:'45／44',ty:'區間、區間快、自強、莒光',dir:'直通臺中最快40分、中位數48分'},
+ '沙鹿':{d:'沙鹿區',r:[5338,4602,3677,3971,5196,5785,5959,5901],tr:'45／45',ty:'區間、區間快、自強、莒光',dir:'直通臺中每天14班，最快36分、中位數43分'},
+ '龍井':{d:'龍井區',r:[783,699,576,574,857,1040,1147,1230],tr:'33／33',ty:'全區間車'},
+ '大肚':{d:'大肚區',r:[1342,1187,930,951,1336,1525,1622,1632],tr:'36／34',ty:'區間、區間快、自強',dir:'直通臺中最快25分、中位數30分'},
+ '追分':{d:'大肚區',r:[785,778,742,867,914,1009,1069,965],tr:'33／33',ty:'全區間車'}
+};
+const RAIL=['日南','大甲','臺中港','清水','沙鹿','龍井','大肚','追分'];
+const METRICS=[
+ {k:'rate',t:'2025年30日死亡率（每10萬人）',f:d=>d.rate,fmt:v=>v.toFixed(1),seq:'red',note:'大安區人口少，8人死亡就讓率變成45.7，要保守看。全市10.1。'},
+ {k:'d7',t:'2019–2025年30日死亡合計（人）',f:d=>d3.sum(d.deaths),fmt:v=>v,seq:'red',note:'海線8區7年共488人。'},
+ {k:'d26',t:'2026年1–8月30日死亡（人）',f:d=>d.d26,fmt:v=>v,seq:'red',note:'龍井已有16人，全市29區最高，超過2025全年15人。'},
+ {k:'a2',t:'2025年A2事故每千人（件）',f:(d,n)=>L.a2d[n]/d.pop*1000,fmt:v=>v.toFixed(1),seq:'red',note:'A2＝受傷或24小時後死亡的事故；以2026/09人口計算。'},
+ {k:'chg',t:'8年人口變化（2018/09–2026/09）',f:d=>d.chg,fmt:v=>(v>0?'+':'')+v.toFixed(1)+'%',seq:'div',note:'藍色增加、紅色減少。梧棲成長最快，大安減少最多。'},
+ {k:'old',t:'65歲以上人口占比（2026/09）',f:d=>d.old,fmt:v=>v.toFixed(1)+'%',seq:'lime',note:'全市18.0%。北段與大肚老化較快。'},
+ {k:'com',t:'跨區通勤率（2020普查）',f:d=>d.com,fmt:v=>v.toFixed(1)+'%',seq:'lime',note:'到外區或外縣市工作的比例。大甲最自足，沙鹿、龍井、大安、外埔超過一半。'},
+ {k:'comin',t:'台中市內跨區通勤率（2020）',f:d=>d.comIn,fmt:v=>v.toFixed(1)+'%',seq:'lime',note:'在台中市其他區工作的比例；大安、外埔、沙鹿、龍井都超過一半。'},
+ {k:'comx',t:'跨縣市通勤率（2020）',f:d=>d.comX,fmt:v=>v.toFixed(1)+'%',seq:'blue',note:'到外縣市工作的比例；大肚6.3%最高，可能與大肚溪對岸的彰化有關（推測）。'},
+ {k:'yb',t:'YouBike站數每萬人',f:d=>d.ybS/d.pop*1e4,fmt:v=>v.toFixed(1),seq:'blue',note:'2026/11/6快照；站數除以2026/09人口。'},
+ {k:'cases',t:'永續提升人行安全計畫核定案件（件）',f:d=>d.cases,fmt:v=>v,seq:'lime',note:'第1–3波，海線21件、全市69件；外埔0件。'}
+];
+const SITES=[
+ {id:'port',xy:L.sites.longjing_port,lv:'L4',name:'港區路廊降風險包',where:'臨港路、港埠路、中航路一帶（梧棲、龍井）',what:'機車停等區前移、大型車轉彎路口幾何改善、動態測速回饋看板（DSFS）',ev:'2025年9件涉入重型貨車的A1，7件同時涉入機車，至少4件是大型車轉彎或變換車道。盲區是物理問題，提醒無法替代。',who:'交通局、港務公司',when:'短期（2027）'},
+ {id:'zhenlan',xy:L.sites.zhenlan,lv:'L4',name:'大甲鎮瀾宮周邊行人友善區',where:'順天路、蔣公路、文武路、光明路一帶',what:'以遶境徒步區範圍為起點，依《行人交通安全設施條例》劃設行人友善區並調降速限',ev:'遶境期間已全面禁車，市府也已在規劃行人友善區；是海線唯一進入規劃的地點。',who:'建設局、交通局',when:'短期（2027）'},
+ {id:'shalu-life',xy:[L.stations['沙鹿'][0]+0.001,L.stations['沙鹿'][1]-0.0045],lv:'L4',name:'沙鹿車站生活區',where:'沙鹿車站周邊',what:'行人友善區常態化、速限調降；鐵公路時刻對接（沙鹿轉運站）',ev:'沙鹿站每日進出5,959人次，直通臺中每天只有14班；轉乘摩擦要先降低。',who:'建設局、交通局、台鐵公司',when:'中期（2028–2030）'},
+ {id:'beishi',xy:L.sites.beishi,lv:'L4',name:'靜宜商圈北勢東路',where:'沙鹿區北勢東路',what:'路邊停車管理＋內凹式裝卸彎，再談人行道',ev:'標線型人行道規劃寬0.9–1.2公尺，最窄只剩20公分；阻力來自商家停車與裝卸。',who:'交通局、區公所',when:'中期（2028–2030）'},
+ {id:'xinxing',xy:L.sites.xinxing,lv:'L3',name:'龍井新興路路口',where:'新興路（含遊園南路口）',what:'Tactical urbanism：臨時curb extension、庇護島，先試再做永久工程',ev:'新興路各路口2025年A1＋A2事故51件，其中遊園南路口12件。',who:'建設局、區公所、協會',when:'短期（2027）'},
+ {id:'wuqi',xy:L.sites.wuqi_zhonghua,lv:'L3',name:'梧棲中華路一段／臺灣大道八段',where:'梧棲區',what:'Tactical urbanism路口改造',ev:'臺灣大道是海線事故件數第二多的道路（2025年739件、947人受傷）。',who:'建設局、區公所、協會',when:'短期（2027）'},
+ {id:'shuntian',xy:L.sites.shuntian,lv:'L3',name:'大甲順天國小通學區',where:'永順街、新美街周邊6公尺巷',what:'通學區self-explaining設計；接送區外移後再試辦School Streets',ev:'臺中學校周邊兩側都有人行道的道路只占7.6%；英國Bradford試辦車流減60–95%，但兒童走路沒有變多，需要配套。',who:'教育局、交通局、學校',when:'短中期'},
+ {id:'zhenzheng',xy:L.sites.zhenzheng,lv:'L3',name:'清水國中周邊延伸路段',where:'鎮政路一帶',what:'把已獲「馬路好行」特優的通學步道延伸串聯',ev:'市府自承清水鰲峰路、民安路、民和路「未能有效串聯」。',who:'教育局、交通局',when:'短中期'},
+ {id:'g-shalu',xy:L.stations['沙鹿'],lv:'L3',zone:true,name:'市街入口gateway試辦：沙鹿',where:'臺灣大道七段進入沙鹿市街處（入口點待現勘）',what:'DSFS＋optical speed bars＋視覺縮窄，另選對照路段',ev:'DSFS平均降約4–5 km/h；單用標線90天後會回彈，要搭配縮窄與執法。',who:'交通局、公路局、協會',when:'短期（2027）'},
+ {id:'g-qingshui',xy:L.stations['清水'],lv:'L3',zone:true,name:'市街入口gateway試辦：清水',where:'中山路進入清水市街處（入口點待現勘）',what:'DSFS＋optical speed bars＋視覺縮窄，另選對照路段',ev:'各區中山路合計2025年838件事故、1,052人受傷，是件數最多的道路。',who:'交通局、公路局、協會',when:'短期（2027）'},
+ {id:'g-dajia',xy:L.stations['大甲'],lv:'L3',zone:true,name:'市街入口gateway試辦：大甲',where:'中山路進入大甲市街處（入口點待現勘）',what:'DSFS＋optical speed bars＋視覺縮窄，另選對照路段',ev:'穿過市街中心的幹道是件數最多的事故地點。',who:'交通局、公路局、協會',when:'短期（2027）'},
+ {id:'tpass',dist:'梧棲區',lv:'L2',name:'TPASS試用月票隨機試驗',where:'梧棲新住戶、港區新進員工、靜宜與弘光新生',what:'在搬家、入職、入學時提供試用月票，6個月後看持卡率',ev:'丹麥免費月票5個月後仍有效；瑞典把試用期加倍，對原本很少搭車的人最有效。機車情境尚未驗證。',who:'交通局、港務公司、學校',when:'短期（2027）'},
+ {id:'boost-daan',dist:'大安區',lv:'L1',name:'長者boost：搭車與過街教室',where:'大安區市民小巴沿線、宮廟與市場',what:'教長者搭市民小巴、安全過街',ev:'大安區65歲以上占22.1%，8年人口減少10%。boost以培養能力為目標，目前沒有交通領域的效果量。',who:'區公所、交通局',when:'短期（2027）'},
+ {id:'boost-waipu',dist:'外埔區',lv:'L1',name:'長者boost：搭車與過街教室',where:'外埔區市民小巴沿線、宮廟與市場',what:'教長者搭市民小巴、安全過街',ev:'外埔區65歲以上占19.5%，人行安全計畫核定案0件。',who:'區公所、交通局',when:'短期（2027）'}
+];
+const LVCOL={L1:'#FFFFFF',L2:'#F2F2F2',L3:'#FFFFFF',L4:'#C8D400'};
+
+const svg=d3.select('#map'), box=document.getElementById('mapbox'), tip=document.getElementById('tip'), info=document.getElementById('info');
+const core=TOWNS.features.filter(f=>f.properties.core);
+const g=svg.append('g');
+const gBase=g.append('g'), gCounty=g.append('g'), gCore=g.append('g'), gA2=g.append('g'), gRMin=g.append('g'), gBlvd=g.append('g'), gRMaj=g.append('g'), gRail=g.append('g'), gYB=g.append('g'), gZone=g.append('g'), gRSta=g.append('g'), gSta=g.append('g'), gGate=g.append('g'), gA1=g.append('g'), gSite=g.append('g'), gLab=g.append('g');
+let proj, path, k=1, metric=METRICS[0], a1f='all';
+
+function txt(el,s){el.textContent=s;return el}
+function showTip(ev,html){tip.innerHTML='';html.forEach((s,i)=>{const d=document.createElement('div');d.textContent=s;if(i===0)d.style.fontWeight='500';tip.appendChild(d)});tip.style.opacity=1;moveTip(ev)}
+function moveTip(ev){const r=box.getBoundingClientRect();let x=ev.clientX-r.left+14,y=ev.clientY-r.top+14;if(x>r.width-270)x-=284;if(y>r.height-80)y-=90;tip.style.left=x+'px';tip.style.top=y+'px'}
+function hideTip(){tip.style.opacity=0}
+
+function colorFor(m){
+ const vals=core.map(f=>m.f(DIST[f.properties.t],f.properties.t));
+ if(m.seq==='div'){const mx=d3.max(vals.map(Math.abs));return {c:d3.scaleDiverging([-mx,0,mx],t=>d3.interpolateRgbBasis(['#D94F3D','#F6F6F6','#3A7CC3'])(t)),lo:-mx,hi:mx,div:true}}
+ const ends={red:['#FCEDE8','#B3321F'],lime:['#F5F8D6','#6E7A00'],blue:['#E6EFF9','#2A5E99']}[m.seq];
+ const lo=d3.min(vals),hi=d3.max(vals);
+ return {c:d3.scaleSequential([lo,hi],d3.interpolateRgb(ends[0],ends[1])),lo,hi};
+}
+function drawLegend(){
+ const lg=document.getElementById('legend');lg.innerHTML='';
+ const s=colorFor(metric);
+ const t=document.createElement('div');t.className='ttl';t.textContent=metric.t;lg.appendChild(t);
+ const ramp=document.createElement('div');ramp.className='ramp';
+ for(let i=0;i<8;i++){const sp=document.createElement('span');sp.style.background=s.c(s.lo+(s.hi-s.lo)*i/7);ramp.appendChild(sp)}
+ lg.appendChild(ramp);
+ const rl=document.createElement('div');rl.className='rampl';
+ const a=document.createElement('span');a.textContent=metric.fmt(s.lo);const b=document.createElement('span');b.textContent=metric.fmt(s.hi);rl.append(a,b);lg.appendChild(rl);
+ if(document.querySelector('[data-layer=a2]').checked){
+  const n=document.createElement('div');n.className='note';n.textContent='A2網格：越紅事故越多（每格約400公尺見方，最多120件）。打開A2時，行政區著色會變淡。';lg.appendChild(n);
+ }
+ const on=id=>document.querySelector(`[data-layer=${id}]`).checked;
+ const addL=(sty,lab)=>{const r=document.createElement('div');r.className='lgline';const i=document.createElement('i');i.style.cssText=sty;const sp=document.createElement('span');sp.textContent=lab;r.append(i,sp);lg.appendChild(r)};
+ if(on('rT'))addL('border-top:4px solid #000','通過性道路（國道、快速公路）');
+ if(on('rD1'))addL('border-top:2.5px solid #A6392C','集散道路（省道、縣道）');
+ if(on('gate')){addL('height:10px;border:3px solid #7B5EA7;border-radius:50%;width:10px;margin:0 8px','往苗栗縣的連接點');addL('height:10px;border:3px solid #6E7A00;border-radius:50%;width:10px;margin:0 8px','往台中市其他區');addL('height:10px;border:3px solid #3A7CC3;border-radius:50%;width:10px;margin:0 8px','往彰化縣')}
+ const n2=document.createElement('div');n2.className='note';n2.textContent='方塊＝研究建議地點（萊姆色L4、白色L3、灰色L2、白底細框L1）；虛線圈＝gateway試辦示意範圍';lg.appendChild(n2);
+}
+
+function fit(){
+ const w=box.clientWidth,h=box.clientHeight;
+ svg.attr('viewBox',[0,0,w,h]);
+ proj=d3.geoMercator().fitExtent([[30,30],[w-30,h-30]],{type:'FeatureCollection',features:core});
+ path=d3.geoPath(proj);
+ render();
+}
+function render(){
+ if(!proj)return;
+ const on=id=>document.querySelector(`[data-layer=${id}]`).checked;
+ gBase.selectAll('path').data(TOWNS.features.filter(f=>!f.properties.core)).join('path').attr('d',path)
+  .attr('fill',f=>f.properties.c==='台中市'?'#E6E6E6':(f.properties.c==='苗栗縣'||f.properties.c==='彰化縣')?'#F2F2F2':'#F8F8F8').attr('stroke','#FFFFFF').attr('stroke-width',1/k);
+ gCounty.selectAll('path').data(COUNTIES.features).join('path').attr('d',path).attr('fill','none').attr('stroke','#888888').attr('stroke-width',1.2/k).style('pointer-events','none');
+ drawRoads(on);
+ const s=colorFor(metric);
+ gCore.selectAll('path').data(core).join('path').attr('d',path)
+  .attr('fill',f=>s.c(metric.f(DIST[f.properties.t],f.properties.t))).attr('fill-opacity',document.querySelector('[data-layer=a2]').checked?0.25:1).attr('stroke','#1A1A1A').attr('stroke-width',1.2/k).style('cursor','pointer')
+  .on('mousemove',(ev,f)=>{const t=f.properties.t;showTip(ev,[t,metric.t+'：'+metric.fmt(metric.f(DIST[t],t))])})
+  .on('mouseleave',hideTip).on('click',(ev,f)=>showDistrict(f.properties.t));
+ // A2 grid
+ const a2max=d3.max(L.A2,d=>d[2]);
+ const a2c=d3.scaleSequentialSqrt([1,a2max],d3.interpolateRgb('#FDE3D8','#B3321F'));
+ const DX=0.004,DY=0.0036;
+ gA2.style('display',on('a2')?null:'none').selectAll('rect').data(L.A2).join('rect')
+  .attr('x',d=>proj([d[0]-DX/2,d[1]+DY/2])[0]).attr('y',d=>proj([d[0]-DX/2,d[1]+DY/2])[1])
+  .attr('width',d=>proj([d[0]+DX/2,d[1]])[0]-proj([d[0]-DX/2,d[1]])[0]).attr('height',d=>proj([d[0],d[1]-DY/2])[1]-proj([d[0],d[1]+DY/2])[1])
+  .attr('fill',d=>a2c(d[2])).attr('opacity',.85)
+  .on('mousemove',(ev,d)=>showTip(ev,['A2事故 '+d[2]+'件（2025）','涉入機車'+d[3]+'、重型貨車'+d[4]+'、行人'+d[5]+'、65歲以上'+d[6]])).on('mouseleave',hideTip);
+ // boulevard
+ gBlvd.style('display',on('blvd')?null:'none').selectAll('path').data([L.blvd]).join('path')
+  .attr('d',d3.line().curve(d3.curveCatmullRom)(L.blvd.map(p=>proj(p)))).attr('fill','none').attr('stroke','#C8D400').attr('stroke-width',7/k).attr('stroke-linecap','round').attr('opacity',.95)
+  .on('mousemove',ev=>showTip(ev,['臺灣大道走廊','海線往市區的公車幹線；捷運藍線規劃路廊（最快2036年通車）'])).on('mouseleave',hideTip)
+  .on('click',()=>showBlvd());
+ // rail
+ const rp=RAIL.map(n=>proj(L.stations[n]));
+ gRail.style('display',on('rail')?null:'none').selectAll('path').data([rp]).join('path').attr('d',d3.line()(rp)).attr('fill','none').attr('stroke','#1A1A1A').attr('stroke-width',2/k).attr('stroke-dasharray',`${6/k} ${4/k}`);
+ // youbike
+ gYB.style('display',on('yb')?null:'none').selectAll('circle').data(L.yb).join('circle')
+  .attr('cx',d=>proj(d)[0]).attr('cy',d=>proj(d)[1]).attr('r',2.6/Math.sqrt(k)).attr('fill','#3A7CC3').attr('opacity',.85)
+  .on('mousemove',(ev,d)=>showTip(ev,['YouBike '+d[2],d[3]+'｜車位'+d[4]])).on('mouseleave',hideTip);
+ // stations
+ const rs=d3.scaleSqrt([0,7000],[0,16]);
+ gSta.style('display',on('sta')?null:'none').selectAll('circle').data(RAIL).join('circle')
+  .attr('cx',n=>proj(L.stations[n])[0]).attr('cy',n=>proj(L.stations[n])[1]).attr('r',n=>Math.max(4,rs(STA[n].r[6]))/Math.sqrt(k))
+  .attr('fill','#FFFFFF').attr('stroke','#1A1A1A').attr('stroke-width',2/k).style('cursor','pointer')
+  .on('mousemove',(ev,n)=>showTip(ev,['台鐵'+n+'站','2025每日進出'+STA[n].r[6].toLocaleString()+'人次｜每方向'+STA[n].tr.split('／')[0]+'班'])).on('mouseleave',hideTip)
+  .on('click',(ev,n)=>showStation(n));
+ // zones
+ const zr=Math.abs(proj([120.6,24.25])[0]-proj([120.609,24.25])[0]);
+ gZone.style('display',on('site')?null:'none').selectAll('circle').data(SITES.filter(s=>s.zone)).join('circle')
+  .attr('cx',s=>proj(s.xy)[0]).attr('cy',s=>proj(s.xy)[1]).attr('r',zr).attr('fill','rgba(200,212,0,.10)').attr('stroke','#6E7A00').attr('stroke-width',1.2/k).attr('stroke-dasharray',`${5/k} ${4/k}`);
+ // A1
+ const pass=c=>a1f==='all'||c[a1f];
+ gA1.style('display',on('a1')?null:'none').selectAll('circle').data(L.A1).join('circle')
+  .attr('cx',c=>proj([c.lon,c.lat])[0]).attr('cy',c=>proj([c.lon,c.lat])[1]).attr('r',6/Math.sqrt(k))
+  .attr('fill',c=>c.heavy?'#E8A825':'#1A1A1A').attr('stroke',c=>c.heavy?'#1A1A1A':'#FFFFFF').attr('stroke-width',1.5/k)
+  .attr('opacity',c=>pass(c)?1:.12).style('cursor','pointer')
+  .on('mousemove',(ev,c)=>showTip(ev,['A1事故｜'+c.date,c.addr,c.parties])).on('mouseleave',hideTip)
+  .on('click',(ev,c)=>showCrash(c));
+ // sites
+ const sxy=s=>s.xy?proj(s.xy):path.centroid(core.find(f=>f.properties.t===s.dist));
+ const sz=18/Math.sqrt(k);
+ const sg=gSite.style('display',on('site')?null:'none').selectAll('g').data(SITES.filter(s=>!s.zone)).join(en=>{const e=en.append('g').style('cursor','pointer');e.append('rect');e.append('text');return e});
+ sg.attr('transform',s=>{const p=sxy(s);const off=s.dist?[0,22/Math.sqrt(k)]:[0,0];return `translate(${p[0]+off[0]},${p[1]+off[1]})`})
+  .on('mousemove',(ev,s)=>showTip(ev,[s.lv+'｜'+s.name,s.when])).on('mouseleave',hideTip).on('click',(ev,s)=>showSite(s));
+ sg.select('rect').attr('x',-sz/2).attr('y',-sz/2).attr('width',sz).attr('height',sz).attr('fill',s=>LVCOL[s.lv]).attr('stroke','#1A1A1A').attr('stroke-width',(s=>s.lv==='L1'?0.8:1.4)).attr('transform','rotate(45)');
+ sg.select('text').attr('text-anchor','middle').attr('dy','0.35em').attr('font-family','Space Grotesk, sans-serif').attr('font-size',8.5/Math.sqrt(k)).attr('font-weight',600).attr('fill','#1A1A1A').text(s=>s.lv);
+ drawLinks(on);
+ // labels
+ gLab.selectAll('text.dl').data(core).join('text').attr('class','dl')
+  .attr('x',f=>path.centroid(f)[0]).attr('y',f=>path.centroid(f)[1]-(SITES.some(s=>s.dist===f.properties.t)?10/Math.sqrt(k):0))
+  .attr('text-anchor','middle').attr('font-size',13/Math.sqrt(k)).attr('font-weight',500).attr('fill','#1A1A1A')
+  .attr('paint-order','stroke').attr('stroke','rgba(255,255,255,.85)').attr('stroke-width',3/k).style('pointer-events','none')
+  .text(f=>f.properties.t.replace('區',''));
+ gLab.selectAll('text.sl').data(on('sta')?RAIL:[]).join('text').attr('class','sl')
+  .attr('x',n=>proj(L.stations[n])[0]+(Math.max(4,rs(STA[n].r[6]))+4)/Math.sqrt(k)).attr('y',n=>proj(L.stations[n])[1]+4/Math.sqrt(k))
+  .attr('font-size',11/Math.sqrt(k)).attr('fill','#1A1A1A').attr('paint-order','stroke').attr('stroke','rgba(255,255,255,.9)').attr('stroke-width',3/k).style('pointer-events','none')
+  .text(n=>n+'站');
+ drawLegend();
+}
+
+const RSTY={'國道':{c:'#000000',w:2.6,cw:5},'快速公路':{c:'#000000',w:1.9,cw:4},'省道':{c:'#A6392C',w:1.7,cw:3.4},'縣道':{c:'#A6392C',w:1.1,cw:0}};
+const GCOL={'苗栗縣':'#7B5EA7','彰化縣':'#3A7CC3','台中市':'#6E7A00'};
+const KEYSTA=['竹南','通霄','苑裡','苗栗','三義','后里','豐原','臺中','新烏日','成功','彰化','員林'];
+const RSTA=REGSTA.filter(s=>!['合興','富貴','內灣'].includes(s[2]));
+let roadKey=null;
+function roadName(r){
+ let ref='';
+ if(r.ref){ref=r.sub==='國道'?'國道'+r.ref+'號':(r.sub==='快速公路'||r.sub==='省道')?'台'+r.ref+'線':r.sub==='縣道'?'縣道'+r.ref:r.ref}
+ return [ref,r.name].filter(Boolean).join(' ')||r.sub;
+}
+function tier(r){return (r.sub==='國道'||r.sub==='快速公路')?'通過性道路':'集散道路'}
+function drawRoads(on){
+ const key=proj.scale()+','+proj.translate();
+ if(roadKey!==key){ROADS.major.forEach(r=>r._d=path({type:'MultiLineString',coordinates:r.c}));ROADS.minor.forEach(r=>r._d=path({type:'MultiLineString',coordinates:r.c}));roadKey=key}
+ const tipR=(ev,r)=>showTip(ev,[roadName(r),tier(r)+'｜'+r.sub]);
+ gRMin.style('display',on('rD2')?null:'none').selectAll('path').data(ROADS.minor).join('path').attr('d',r=>r._d).attr('fill','none')
+  .attr('stroke','#A6392C').attr('stroke-opacity',.55).attr('stroke-width',r=>(r.sub==='市區主要幹道'?0.9:0.6)/k).attr('stroke-linecap','round')
+  .on('mousemove',tipR).on('mouseleave',hideTip);
+ const order=['縣道','省道','快速公路','國道'];
+ const ms=ROADS.major.slice().sort((a,b)=>order.indexOf(a.sub)-order.indexOf(b.sub));
+ const vis=r=>(r.sub==='國道'||r.sub==='快速公路')?on('rT'):on('rD1');
+ gRMaj.selectAll('path.cas').data(ms.filter(r=>RSTY[r.sub].cw>0)).join('path').attr('class','cas').attr('d',r=>r._d).attr('fill','none')
+  .attr('stroke','#FFFFFF').attr('stroke-width',r=>RSTY[r.sub].cw/k).attr('stroke-linecap','round').style('display',r=>vis(r)?null:'none').style('pointer-events','none');
+ gRMaj.selectAll('path.ln').data(ms).join('path').attr('class','ln').attr('d',r=>r._d).attr('fill','none')
+  .attr('stroke',r=>RSTY[r.sub].c).attr('stroke-width',r=>RSTY[r.sub].w/k).attr('stroke-linecap','round').style('display',r=>vis(r)?null:'none')
+  .on('mousemove',tipR).on('mouseleave',hideTip);
+ gRMaj.selectAll('path.ln').raise();
+}
+function drawLinks(on){
+ gRSta.style('display',on('rsta')?null:'none').selectAll('circle').data(RSTA).join('circle')
+  .attr('cx',s=>proj(s)[0]).attr('cy',s=>proj(s)[1]).attr('r',3.2/k).attr('fill','#FFFFFF').attr('stroke','#4A4A4A').attr('stroke-width',1.3/k)
+  .on('mousemove',(ev,s)=>showTip(ev,['台鐵'+s[2]+'站','區域車站（運量未納入本研究）'])).on('mouseleave',hideTip);
+ gGate.style('display',on('gate')?null:'none').selectAll('circle').data(ROADS.gates).join('circle')
+  .attr('cx',d=>proj(d.xy)[0]).attr('cy',d=>proj(d.xy)[1]).attr('r',6.5/k).attr('fill','#FFFFFF').attr('stroke',d=>GCOL[d.county]).attr('stroke-width',3.2/k).style('cursor','pointer')
+  .on('mousemove',(ev,d)=>showTip(ev,[roadName(d),tier(d)+'｜往'+d.to])).on('mouseleave',hideTip).on('click',(ev,d)=>showGates(d));
+ gLab.selectAll('text.rl').data(on('rsta')?RSTA.filter(s=>KEYSTA.includes(s[2])):[]).join('text').attr('class','rl')
+  .attr('x',s=>proj(s)[0]+6/k).attr('y',s=>proj(s)[1]+4/k).attr('font-size',11/k).attr('fill','#4A4A4A')
+  .attr('paint-order','stroke').attr('stroke','rgba(255,255,255,.9)').attr('stroke-width',3/k).style('pointer-events','none').text(s=>s[2]);
+ const CL=[['苗栗縣',[120.86,24.52]],['彰化縣',[120.47,23.97]],['台中市',[120.84,24.17]]];
+ gLab.selectAll('text.cl').data(k<1?CL:[]).join('text').attr('class','cl')
+  .attr('x',c=>proj(c[1])[0]).attr('y',c=>proj(c[1])[1]).attr('text-anchor','middle').attr('font-size',18/k).attr('font-weight',300)
+  .attr('letter-spacing',4/k).attr('fill','#6A6A6A').style('pointer-events','none').text(c=>c[0]);
+}
+let curView='region';
+function setView(v,instant){
+ curView=v;document.getElementById('vRegion').classList.toggle('on',v==='region');document.getElementById('vCore').classList.toggle('on',v==='core');
+ let t=d3.zoomIdentity;
+ if(v==='region'){const w=box.clientWidth,h=box.clientHeight;const a=proj([120.36,24.70]),b=proj([120.95,23.88]);
+  const sc=Math.min(w/(b[0]-a[0]),h/(b[1]-a[1]))*0.96;const cx=(a[0]+b[0])/2,cy=(a[1]+b[1])/2;t=d3.zoomIdentity.translate(w/2-sc*cx,h/2-sc*cy).scale(sc)}
+ (instant?svg:svg.transition().duration(650)).call(zoom.transform,t);
+}
+function showGates(sel){
+ head('Connections','海線的對外道路連結');
+ if(sel)info.appendChild(el('p','','你點的是：'+roadName(sel)+'（'+tier(sel)+'），往'+sel.to+'。'));
+ const G=ROADS.gates;
+ const t=el('div');t.appendChild(el('span','tag','共'+G.length+'處'));info.appendChild(t);
+ ['苗栗縣','台中市','彰化縣'].forEach(c=>{
+  const list=G.filter(d=>d.county===c);if(!list.length)return;
+  const hd=el('p','',(c==='台中市'?'往台中市其他區':'往'+c)+'：'+list.length+'處');hd.style.color='#1A1A1A';hd.style.fontWeight='500';info.appendChild(hd);
+  const d=el('dl');list.forEach(x=>{d.appendChild(el('dt','',x.sub));d.appendChild(el('dd','',roadName(x)+(c==='台中市'?'（'+x.to.replace('台中市','')+'）':'')))});info.appendChild(d);
+ });
+ info.appendChild(el('p','','以省道、縣道層級來看，從海線往台中市區（西屯、南屯、大雅）只有臺灣大道（台12）、中清路（台10）、向上路（縣136）三條；國道1、3、4號與台61是主要的通過性連結。'));
+ info.appendChild(el('p','','通勤：沙鹿、龍井、大安、外埔過半在台中市其他區工作；跨縣市通勤率3.0%到6.3%，大肚最高（2020普查）。'));
+ info.appendChild(el('p','note','連接點是國道、快速公路、省道、縣道與海線8區外圍行政界的交點；同一條路在附近的多個交點只算一次，鄉道與市區幹道未計入。'));
+}
+const zoom=d3.zoom().scaleExtent([0.3,14]).on('zoom',ev=>g.attr('transform',ev.transform)).on('end',ev=>{const nk=ev.transform.k;if(Math.abs(nk-k)>0.01){k=nk;render()}});
+svg.call(zoom);
+document.getElementById('zin').onclick=()=>svg.transition().call(zoom.scaleBy,1.6);
+document.getElementById('zout').onclick=()=>svg.transition().call(zoom.scaleBy,1/1.6);
+document.getElementById('zreset').onclick=()=>setView(curView);
+
+// controls
+const sel=document.getElementById('metric');
+METRICS.forEach(m=>{const o=document.createElement('option');o.value=m.k;o.textContent=m.t;sel.appendChild(o)});
+function setMetric(){metric=METRICS.find(m=>m.k===sel.value);document.getElementById('metricnote').textContent=metric.note;render()}
+sel.onchange=setMetric;
+document.querySelectorAll('[data-layer]').forEach(cb=>cb.onchange=render);
+document.querySelectorAll('#a1f button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#a1f button').forEach(x=>x.classList.remove('on'));b.classList.add('on');a1f=b.dataset.f;
+ document.querySelector('[data-layer=a1]').checked=true;render();
+ const n=a1f==='all'?L.A1.length:L.A1.filter(c=>c[a1f]).length;
+ showA1Summary(n)});
+
+// info panels
+function el(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e}
+function head(eb,title){info.innerHTML='';info.appendChild(el('div','eyebrow secline',eb));info.appendChild(el('div','big',title))}
+function dl(pairs){const d=el('dl');pairs.forEach(([a,b])=>{d.appendChild(el('dt','',a));d.appendChild(el('dd','',b))});info.appendChild(d)}
+function bars(vals,labels,cap,hlIdx,partIdx){
+ const w=el('div','mini');w.appendChild(el('div','cap',cap));
+ const b=el('div','bars');const mx=d3.max(vals)||1;
+ vals.forEach((v,i)=>{const d=el('div',i===hlIdx?'hl':(i===partIdx?'part':''));d.style.height=(v/mx*100)+'%';const s=el('span','',typeof v==='number'?v.toLocaleString():v);d.appendChild(s);b.appendChild(d)});
+ w.appendChild(b);const y=el('div','yrs');labels.forEach(l=>y.appendChild(el('span','',l)));w.appendChild(y);info.appendChild(w);
+}
+function intro(){
+ head('Start here','點地圖看細節');
+ info.appendChild(el('p','','點行政區看人口、通勤與歷年死亡；點車站看運量與班次；點黑點或紅點看A1事故；點菱形看研究建議的行動。'));
+ info.appendChild(el('p','','地圖左上可切換「中台灣」與「海線8區」兩種視野。右側的著色有11種指標；路網依荷蘭Sustainable Safety分成通過性道路（黑）與集散道路（朱紅）。'));
+ info.appendChild(el('p','','試試按「看海線的對外連結」，看海線靠哪幾條路接到苗栗、彰化和台中市區。'));
+}
+function showDistrict(t){
+ const d=DIST[t];head('District',t);
+ bars([...d.deaths,d.d26],['19','20','21','22','23','24','25','26*'],'30日死亡人數（2019–2025；26*為1–8月）',6,7);
+ dl([['人口（2026/09）',d.pop.toLocaleString()+'人'],['8年人口變化',(d.chg>0?'+':'')+d.chg+'%'],['65歲以上占比',d.old+'%'],['跨區通勤率（2020）',d.com+'%'],
+  ['2025死亡率',d.rate+'／10萬人'+(d.small?'（小母數）':'')],['行人死亡2019–2025',d.ped7+'人'],['2025 A1／A2事故',(L.a1d[t]||0)+'件／'+(L.a2d[t]||0).toLocaleString()+'件'],
+  ['YouBike','站'+d.ybS+'、車位'+d.ybD.toLocaleString()],['人行安全核定案',d.cases+'件']]);
+ const s=SITES.filter(x=>x.dist===t);
+ if(s.length) info.appendChild(el('p','','建議行動：'+s.map(x=>x.lv+' '+x.name).join('、')));
+}
+function showStation(n){
+ const s=STA[n];head('TRA Station','台鐵'+n+'站');
+ bars(s.r,['19*','20','21','22','23','24','25','26*'],'每日平均進出站人次（19*自4/23起；26*至11/1）',6);
+ const p=[['行政區',s.d],['每日停靠（南下／北上）',s.tr+'班'],['車種',s.ty]];
+ if(s.dir)p.push(['直通臺中車站',s.dir]);
+ dl(p);
+ info.appendChild(el('p','','海線8站2025年合計每天約2萬人次，比2019年多約21%，但主要站每小時只有2到3班，尖峰沒有加密。'));
+}
+function showCrash(c){
+ head('A1 Crash · 2025',c.addr.replace(/^[^區]+區/,m=>m));
+ info.insertBefore(el('div','date',c.date+'　'+c.time),info.querySelector('.big'));
+ const tags=el('div');[['heavy','涉入重型貨車'],['moto','涉入機車'],['old','涉入65歲以上'],['ped','涉入行人']].forEach(([k,l])=>{if(c[k])tags.appendChild(el('span','tag'+(k==='heavy'?'':' o'),l))});info.appendChild(tags);
+ dl([['當事者',c.parties],['事故型態',c.type],['主要肇因',c.cause],['死傷（24小時）',c.dh]]);
+ info.appendChild(el('p','','資料：內政部警政署114年A1事故。A1是24小時內死亡的事故，跟行政區的30日死亡不同口徑。'));
+}
+function showA1Summary(n){
+ const lab={all:'全部',heavy:'涉入重型貨車',moto:'涉入機車',old:'涉入65歲以上當事者',ped:'涉入行人'}[a1f];
+ head('A1 Filter',lab+'：'+n+'件');
+ info.appendChild(el('p','','2025年海線A1事故共36件：涉入機車26件（72.2%）、65歲以上12件（33.3%）、重型貨車9件（25.0%，全市20.9%）、行人6件。'));
+ if(a1f==='heavy')info.appendChild(el('p','','重型貨車的A1集中在港區聯外道路：臨港路、港埠路、中航路一帶，多與機車同時涉入。'));
+ if(a1f==='ped')info.appendChild(el('p','','6件行人A1，行人年齡都在60歲以上。'));
+}
+function showSite(s){
+ head('Proposed Action · '+s.lv,s.name);
+ const t=el('div');t.appendChild(el('span','tag'+(s.lv==='L4'?'':' o'),{L1:'L1 訊息型nudge',L2:'L2 降低門檻、抓對時機',L3:'L3 感知型道路設計',L4:'L4 結構性shove'}[s.lv]));t.appendChild(el('span','tag o',s.when));info.appendChild(t);
+ dl([['位置',s.where],['做什麼',s.what],['主責',s.who]]);
+ info.appendChild(el('p','','為什麼：'+s.ev));
+ info.appendChild(el('p','note','位置依事故資料地址推估，屬示意。'));
+}
+function showBlvd(){
+ head('Corridor','臺灣大道走廊');
+ dl([['公車','300、309、310等5條路線，每天雙向318班'],['2026變化','雙節公車退場，單車載客量約減半；交通局稱已加倍班次'],['捷運藍線','24.78公里、20站；BC11標2026/8開工，最快2036年通車'],['2025事故','臺灣大道739件、947人受傷（海線各區合計）']]);
+ info.appendChild(el('p','','未來十年海線只能靠公車與台鐵，這條走廊的運能與路口安全是短期重點。'));
+}
+fit();setMetric();intro();setView('region',true);
+
+const THEMES={
+ all:{m:'rate',v:'region',L:{a1:1,a2:0,sta:1,rail:1,blvd:1,yb:0,site:1,rT:1,rD1:1,rD2:1,gate:1,rsta:1}},
+ safety:{m:'rate',v:'core',L:{a1:1,a2:1,sta:0,rail:0,blvd:0,yb:0,site:1,rT:1,rD1:1,rD2:0,gate:0,rsta:0},eb:'Theme · Road Safety',t:'交通安全',p:['2025年海線每10萬人30日死亡14.6人，全市10.1；海線占全市死亡25.8%，人口只占17.9%。','金點是涉入重型貨車的A1事故，集中在港區路廊；A2密度最高的是穿過市街的中山路、臺灣大道、沙田路。','試著把著色換成「2026年1–8月30日死亡」：龍井已有16人，全市最高。']},
+ transit:{m:'comin',v:'region',L:{a1:0,a2:0,sta:1,rail:1,blvd:1,yb:1,site:0,rT:0,rD1:0,rD2:0,gate:0,rsta:1},eb:'Theme · Public Transport',t:'公共運輸',p:['海線8個台鐵站2025年每天約2萬人次，比2019年多約21%；主要站每方向約45班，沙鹿直通臺中只有14班。','萊姆色線是臺灣大道：海線往市區的公車幹線，也是捷運藍線規劃走廊（最快2036年通車）。','著色是台中市內跨區通勤率：沙鹿、龍井、大安、外埔過半在外區工作。點車站看歷年運量。']},
+ towns:{m:'chg',v:'region',L:{a1:0,a2:0,sta:1,rail:1,blvd:0,yb:0,site:0,rT:1,rD1:1,rD2:0,gate:1,rsta:1},eb:'Theme · Connectivity',t:'城鎮連接',p:['梧棲8年人口增加16.7%，大安減少10.0%：港市成長核心與北段是兩種需求。','空心環是海線對外的15處道路連接點。以省道、縣道來看，往台中市區只有臺灣大道、中清路、向上路三條。','按「看海線的對外連結」看完整清單。']},
+ streets:{m:'cases',v:'core',L:{a1:0,a2:0,sta:1,rail:0,blvd:0,yb:1,site:1,rT:0,rD1:1,rD2:1,gate:0,rsta:0},eb:'Theme · People-centred Streets',t:'人本交通',p:['2010–2020年騎樓整平全市約115公里，海線只有大甲3.1公里；人行安全核定案海線21件，外埔0件。','藍點是YouBike 2.0站點（405站）；菱形是研究建議的行動地點：萊姆色L4結構性介入、白色L3感知型設計。','點菱形看每個地點要做什麼、為什麼、誰負責。']}
+};
+function applyTheme(key){
+ const th=THEMES[key];
+ document.querySelectorAll('#themes .cat-pill').forEach(b=>b.classList.toggle('on',b.dataset.t===key));
+ Object.entries(th.L).forEach(([id,v])=>{const cb=document.querySelector(`[data-layer=${id}]`);if(cb)cb.checked=!!v});
+ sel.value=th.m;metric=METRICS.find(m=>m.k===th.m);document.getElementById('metricnote').textContent=metric.note;
+ render();setView(th.v);
+ if(key==='all'){intro();return}
+ head(th.eb,th.t);th.p.forEach(t=>info.appendChild(el('p','',t)));
+}
+document.querySelectorAll('#themes .cat-pill').forEach(b=>b.onclick=()=>applyTheme(b.dataset.t));
+document.getElementById('vRegion').onclick=()=>setView('region');
+document.getElementById('vCore').onclick=()=>setView('core');
+document.getElementById('btnGates').onclick=()=>{document.querySelector('[data-layer=gate]').checked=true;render();showGates(null)};
+window.addEventListener('resize',()=>{clearTimeout(window._rt);window._rt=setTimeout(fit,150)});
+</script>
+</body>
+</html>
